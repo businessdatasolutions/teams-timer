@@ -17,5 +17,8 @@ export function parseParams(): AppConfig {
   if (isNaN(fish) || fish < 1) fish = 4;
   if (fish > 20) fish = 20;
 
-  return { minutes, seconds, theme, text, totalSeconds, fish };
+  let warp = parseFloat(params.get('warp') ?? '');
+  if (isNaN(warp) || warp < 1) warp = 20;
+
+  return { minutes, seconds, theme, text, totalSeconds, fish, warp };
 }

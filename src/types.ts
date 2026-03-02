@@ -5,6 +5,7 @@ export interface AppConfig {
   text: string;
   totalSeconds: number;
   fish: number;
+  warp: number;
 }
 
 export interface TimerState {

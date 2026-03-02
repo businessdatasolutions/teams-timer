@@ -6,6 +6,7 @@ const registry: Record<string, () => Promise<{ default: ThemeConstructor }>> = {
   koi: () => import('./themes/koi/index'),
   cosmos: () => import('./themes/cosmos/index'),
   sand: () => import('./themes/sand/index'),
+  earth: () => import('./themes/earth/index'),
 };
 
 export async function loadTheme(name: string): Promise<ThemeConstructor> {
