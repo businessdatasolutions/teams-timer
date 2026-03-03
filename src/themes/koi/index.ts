@@ -3,6 +3,7 @@ import { AppConfig, TimerState } from '../../types';
 import { Koi } from './fish';
 import { RippleSystem } from './ripples';
 import { Caustics } from './caustics';
+import { FoodSystem } from './food';
 import { generatePebbles, generateVignette } from './pebbles';
 
 const STONE_CSS = `
@@ -34,6 +35,7 @@ class KoiTheme extends BaseTheme {
   private fish: Koi[] = [];
   private ripples = new RippleSystem();
   private caustics = new Caustics();
+  private food = new FoodSystem();
   private pebbleBg: HTMLCanvasElement | null = null;
   private vignetteBg: HTMLCanvasElement | null = null;
   private stone!: HTMLElement;
@@ -43,6 +45,27 @@ class KoiTheme extends BaseTheme {
   private endMessage!: HTMLElement;
   private time = 0;
   private lastProgress = 0;
+
+  private onMouseMove = (e: MouseEvent) => {
+    this.food.setPointerPosition(e.clientX, e.clientY);
+    this.food.setPointerVisible(true);
+  };
+  private onMouseLeave = () => { this.food.setPointerVisible(false); };
+  private onKeyDown = (e: KeyboardEvent) => { if (e.code === 'Space') { e.preventDefault(); this.food.setDispensing(true); } };
+  private onKeyUp = (e: KeyboardEvent) => { if (e.code === 'Space') this.food.setDispensing(false); };
+  private onTouchStart = (e: TouchEvent) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    this.food.setPointerPosition(t.clientX, t.clientY);
+    this.food.setPointerVisible(true);
+    this.food.setTouchStart();
+  };
+  private onTouchMove = (e: TouchEvent) => {
+    e.preventDefault();
+    const t = e.touches[0];
+    this.food.setPointerPosition(t.clientX, t.clientY);
+  };
+  private onTouchEnd = () => { this.food.setPointerVisible(false); };
 
   init(config: AppConfig): void {
     this.container.style.backgroundColor = '#2c5c63';
@@ -88,6 +111,15 @@ class KoiTheme extends BaseTheme {
     const w = window.innerWidth;
     const h = window.innerHeight;
     this.fish = Array.from({ length: config.fish }, () => new Koi(w, h));
+
+    // Food tin interaction
+    this.canvas.addEventListener('mousemove', this.onMouseMove);
+    this.canvas.addEventListener('mouseleave', this.onMouseLeave);
+    window.addEventListener('keydown', this.onKeyDown);
+    window.addEventListener('keyup', this.onKeyUp);
+    this.canvas.addEventListener('touchstart', this.onTouchStart, { passive: false });
+    this.canvas.addEventListener('touchmove', this.onTouchMove, { passive: false });
+    this.canvas.addEventListener('touchend', this.onTouchEnd);
   }
 
   resize(w: number, h: number): void {
@@ -106,8 +138,19 @@ class KoiTheme extends BaseTheme {
     const w = this.canvas.width;
     const h = this.canvas.height;
 
+    const foodTargets = this.food.update(dt, this.time);
+
     for (const f of this.fish) {
-      f.update(dt, w, h);
+      f.update(dt, w, h, foodTargets);
+      // Extra ripples when feeding
+      if (foodTargets.length > 0) {
+        const fdx = f.x - foodTargets[0].x;
+        const fdy = f.y - foodTargets[0].y;
+        if (fdx * fdx + fdy * fdy < 900 && Math.random() < 0.02) {
+          this.ripples.spawnAt(f.x, f.y);
+        }
+      }
+      this.food.consumeNear(f.x, f.y, dt);
       if (Math.random() < 0.004) this.ripples.spawnAt(f.x, f.y);
     }
     if (Math.random() < 0.015) this.ripples.spawnRandom(w, h);
@@ -130,6 +173,9 @@ class KoiTheme extends BaseTheme {
     // Caustics
     this.caustics.render(ctx, w, h, this.time);
 
+    // Food pellets
+    this.food.renderPellets(ctx);
+
     // Ripples
     this.ripples.render(ctx);
 
@@ -150,6 +196,9 @@ class KoiTheme extends BaseTheme {
       ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
       ctx.fillRect(0, 0, w, h);
     }
+
+    // Food tin (above everything)
+    this.food.renderTin(ctx);
   }
 
   onComplete(): void {
@@ -159,6 +208,13 @@ class KoiTheme extends BaseTheme {
   }
 
   dispose(): void {
+    this.canvas.removeEventListener('mousemove', this.onMouseMove);
+    this.canvas.removeEventListener('mouseleave', this.onMouseLeave);
+    window.removeEventListener('keydown', this.onKeyDown);
+    window.removeEventListener('keyup', this.onKeyUp);
+    this.canvas.removeEventListener('touchstart', this.onTouchStart);
+    this.canvas.removeEventListener('touchmove', this.onTouchMove);
+    this.canvas.removeEventListener('touchend', this.onTouchEnd);
     this.stone.remove();
     this.duskOverlay.remove();
     this.endMessage.remove();

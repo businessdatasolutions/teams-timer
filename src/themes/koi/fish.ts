@@ -1,3 +1,6 @@
+import { type FoodTarget } from './food';
+import { lerp } from '../../utils/math';
+
 interface HistoryPoint {
   x: number;
   y: number;
@@ -30,6 +33,7 @@ export class Koi {
   private vx: number;
   private vy: number;
   private speed: number;
+  private baseSpeed: number;
   private history: HistoryPoint[];
   private historyLength = 35;
   private colors: KoiColors;
@@ -42,6 +46,7 @@ export class Koi {
     this.vx = Math.random() - 0.5;
     this.vy = Math.random() - 0.5;
     this.speed = 1.0 + Math.random() * 0.6;
+    this.baseSpeed = this.speed;
     this.history = [];
     this.colors = PALETTES[Math.floor(Math.random() * PALETTES.length)];
     this.size = 12 + Math.random() * 5;
@@ -58,7 +63,7 @@ export class Koi {
     }
   }
 
-  update(dt: number, canvasW: number, canvasH: number): void {
+  update(dt: number, canvasW: number, canvasH: number, foodTargets?: FoodTarget[]): void {
     const scale = dt / 16.67;
 
     // Wander
@@ -84,6 +89,30 @@ export class Koi {
     if (dist < 220) {
       this.vx -= (dx / dist) * turn * 1.5;
       this.vy -= (dy / dist) * turn * 1.5;
+    }
+
+    // Seek food
+    if (foodTargets && foodTargets.length > 0) {
+      const target = foodTargets[0];
+      const fdx = target.x - this.x;
+      const fdy = target.y - this.y;
+      const fdist = Math.sqrt(fdx * fdx + fdy * fdy);
+      const attractionRadius = 400;
+
+      if (fdist < attractionRadius && fdist > 1) {
+        const pull = Math.min(target.strength / 10, 1.0) * 0.08;
+        const proximity = 1 - fdist / attractionRadius;
+        this.vx += (fdx / fdist) * pull * proximity;
+        this.vy += (fdy / fdist) * pull * proximity;
+      }
+
+      if (fdist < 50) {
+        this.speed = lerp(this.speed, 0.4, 0.05);
+      } else {
+        this.speed = lerp(this.speed, this.baseSpeed, 0.02);
+      }
+    } else {
+      this.speed = lerp(this.speed, this.baseSpeed, 0.02);
     }
 
     // Normalize
